@@ -1,4 +1,6 @@
-metadata:
+features:
+  navigation back button: False
+  question back button: True
   back button label: Undo
   continue button label: Next
 ---
@@ -7,8 +9,6 @@ data:
   - "Ziang Li"
   - "Valeria Fedyk"
   - "Sean Lee"
----
-comment: |
   - "Angela Ma"
   - "Anna Helmke"
   - "Andrew Kane"
@@ -23,57 +23,60 @@ comment: |
 ---
 objects:
   - options: DAList.using(object_type=Individual, there_are_any=True)
-  - new_options: DAList.using(object_type=Individual, there_are_any=True)
 ---
 initial: True
 code: |
   reconsider('names')
   options.gather()
-  new_options.clear()
+  
+  log('-- options --', 'console')
+  new_options = []
   for index, name in enumerate(names):
     log(f'index: {index}', 'console')
     matching_options = [option for option in options if option.name.first == name]
     log(matching_options, 'console')
     if len(matching_options) > 0:
-      new_options.append(matching_options[0], set_instance_name=True)
-      new_option = new_options.item(index)
-      log(new_option.name.first, 'console')
+      log(matching_options[0].name.first, 'console')
+      new_options.append(matching_options[0])
     else:
-      new_option = new_options.appendObject()
+      new_option = Individual()
       new_option.name.first = name
-      #log(new_option.name.first, 'console')
-    
+      new_options.append(new_option)
+      log(new_option.name.first, 'console')
     log(f'new_options length: {len(new_options)}', 'console')
-  new_options.gathered = True
-  new_options.there_is_another = False
-  
   options.clear()
-  log('starting options', 'console')
+  log('populate empty options', 'console')
   for option in new_options:
     options.append(option, set_instance_name=True)
-    log(options, 'console')
+  log(options, 'console')
   
+  log('-- recommendations --', 'console')
+  if defined('recommendations'):
+    update_choices( options, recommendations )
   
-  #options = new_options
+  log('-- to_avoid --', 'console')
+  if defined('to_avoid'):
+    update_choices( options, to_avoid )
   
-    #log(index, 'console')
-    #log(name, 'console')
-    #matching_option = [option for option in options if option.name.first == name][0]
-    #log('matching_option:', 'console')
-    #log(matching_option.name.first, 'console')
-    #if not defined(f'options[{index}]'):
-    #  log('appending', 'console')
-    #  options.appendObject()
-    #if options[index].name.first != name:
-    #  log('setting', 'console')
-    #  log(name, 'console')
-    #  options[index].name.first = name
-  #to_delete = []
-  #for index, option in enumerate(options):
-  #  if defined(f'name[{index}]') and name[index] != option.name.first:
-  #    to_delete.append(index)
-  #for index in to_delete:
-  #  options.delitem(index)
+  process_action()
+---
+code: |
+  def update_choices(all_options, choices):
+    new_choices = []
+    for option in all_options:
+      matching_choices = [choice for choice in choices if choice.name.first == option.name.first]
+      log('matches', 'console')
+      log(matching_choices, 'console')
+      if len(matching_choices) > 0:
+        log(matching_choices[0].name.first, 'console')
+        new_choices.append(matching_choices[0])
+  
+    choices.clear()
+    if len(new_choices) > 0:
+      for choice in new_choices:
+        choices.append(choice, set_instance_name=True)
+      log(f'new choices: {choices}', 'console' )
+      log(choices, 'console')
 ---
 code: |
   options[i].name.first = names[i]
@@ -86,18 +89,12 @@ code: |
 mandatory: True
 code: |
   multi_user = True
-  options.gather()
-  log(options[len(options) - 1].name.first, 'console')
-  log(names[len(names) - 1], 'console')
-  log(set(names).symmetric_difference(set([option.name.first for option in options])), 'console')
-  #set(c).symmetric_difference(set(d))
-  if len(set(names) - set([option.name.first for option in options])) > 0:
-    log('yes', 'console')
-  their_choices
+  #options.gather happens in `initial` block. Not ideal.
+  recommendations
   # why doesn't this trigger gathering while the table does
-  #their_choices.gather()
-  their_choices.complete_attribute = "confidence"
-  if their_choices.number_gathered() > 0:
+  #recommendations.gather()
+  recommendations.complete_attribute = "confidence"
+  if recommendations.number_gathered() > 0:
     rank_choices
   to_avoid
   to_avoid.complete_attribute = "confidence"
@@ -108,11 +105,23 @@ code: |
   submit
   end
 ---
+code: |
+  def reorder_options(unordered):
+    reconsider('names')
+    ordered = []
+    for name in names:
+      matching_items = [item for item in unordered if item.name.first == name]
+      log(matching_items, 'console')
+      if len(matching_items) > 0:
+        log(matching_items[0].name.first, 'console')
+        ordered.append(matching_items[0])
+    return ordered
+---
 question: Pick the candidates you recommend hiring
 subquestion: |
   Later you will get to recommend **against** hiring some candidates.
 fields:
-  - no label: their_choices
+  - no label: recommendations
     datatype: object_checkboxes
     choices: |
       options
@@ -121,19 +130,19 @@ if:
   defined('to_avoid')
 question: Pick the candidates you recommend hiring
 fields:
-  - no label: their_choices
+  - no label: recommendations
     datatype: object_checkboxes
     choices: |
-      options.difference(to_avoid)
+      reorder_options(options.difference(to_avoid))
 ---
 question: Pick the candidates you recommend **against**
 fields:
   - no label: to_avoid
     datatype: object_checkboxes
     choices: |
-      options.difference(their_choices)
+      reorder_options(options.difference(recommendations))
 ---
-# Must come first or `to_avoid` will be gathered early
+# Must come before other gathering in the file to avoid gathering `to_avoid` early
 if: |
   x in to_avoid
 generic object: Individual
@@ -153,7 +162,7 @@ fields:
     input type: area
 ---
 if: |
-  x in their_choices
+  x in recommendations
 generic object: Individual
 question: Tell us more about ${ x }
 subquestion: |
@@ -184,16 +193,17 @@ fields:
     input type: area
 ---
 continue button field: rank_choices
-question: Rank
+question: |
+  % if recommendations.number_gathered() > 1:
+  Rank the candidates
+  % else:
+  Review your recommendation
+  % endif
 subquestion: |
-  Rank your choices
-  
-  ${ choices_table }
+  ${ rank_table }
 ---
 table: rank_table
-rows: their_choices
-#rows: |
-#  [choice for choice in their_choices if choice.do_hire]
+rows: recommendations
 columns:
   - Rank: |
       row_index + 1
@@ -225,31 +235,29 @@ edit:
 ---
 continue button field: rank_choices
 need:
-  - their_choices.gathered
+  - recommendations.gathered
   - rank_table
 question: Rank your hiring choices
 subquestion: |
-  ${ action_button_html(url_action('their_choices'), label="Change your choices") }
+  ${ action_button_html(url_action('recommendations'), label="Change your recommendations") }
   
   ${ rank_table }
 ---
 continue button field: submit
 continue button label: Submit your answers
-question: Review your answers
+question: Review all your answers
 subquestion: |
   #### Candidates you recommend hiring
   
-  % if their_choices.number_gathered() > 0:
+  % if recommendations.number_gathered() > 0:
   ${ rank_table }
   % else:
   None
   % endif
   
-  ${ action_button_html(url_action('their_choices'), label="Edit candidates you recommend hiring") }
+  ${ action_button_html(url_action('recommendations'), label="Edit candidates you recommend hiring") }
   
-  % if their_choices.number_gathered() > 0 and to_avoid.number_gathered() > 0:
   ---
-  % endif
   
   #### Candidates you recommend against
   
@@ -260,6 +268,18 @@ subquestion: |
   % endif
   
   ${ action_button_html(url_action('to_avoid'), label="Edit candidates you recommend **against**") }
+  
+  ---
+  
+  #### Candidates for whom you gave no input
+  
+  % if len((options.difference(to_avoid)).difference(recommendations)) > 0:
+  % for unchosen in reorder_options((options.difference(to_avoid)).difference(recommendations)):
+  * ${ unchosen }
+  % endfor
+  % else:
+  None
+  % endif
 ---
 event: end
 question: Thank you for taking the survey!
