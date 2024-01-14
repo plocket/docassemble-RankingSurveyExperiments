@@ -1,0 +1,282 @@
+metadata:
+  back button label: Undo
+  continue button label: Next
+---
+variable name: names
+data:
+  - "Ziang Li"
+  - "Valeria Fedyk"
+  - "Sean Lee"
+---
+comment: |
+  - "Angela Ma"
+  - "Anna Helmke"
+  - "Andrew Kane"
+  - "Michael Gropper"
+  - "Patrick Blonien"
+  - "Xiaobo Yu"
+  - "Jacob Conway"
+  - "Ahmed Guecioueur"
+  - "Simon Oh"
+  - "Danil Dmitriev"
+  - "Edward Shore"
+---
+objects:
+  - options: DAList.using(object_type=Individual, there_are_any=True)
+  - new_options: DAList.using(object_type=Individual, there_are_any=True)
+---
+initial: True
+code: |
+  reconsider('names')
+  options.gather()
+  new_options.clear()
+  for index, name in enumerate(names):
+    log(f'index: {index}', 'console')
+    matching_options = [option for option in options if option.name.first == name]
+    log(matching_options, 'console')
+    if len(matching_options) > 0:
+      new_options.append(matching_options[0], set_instance_name=True)
+      new_option = new_options.item(index)
+      log(new_option.name.first, 'console')
+    else:
+      new_option = new_options.appendObject()
+      new_option.name.first = name
+      #log(new_option.name.first, 'console')
+    
+    log(f'new_options length: {len(new_options)}', 'console')
+  new_options.gathered = True
+  new_options.there_is_another = False
+  
+  options.clear()
+  log('starting options', 'console')
+  for option in new_options:
+    options.append(option, set_instance_name=True)
+    log(options, 'console')
+  
+  
+  #options = new_options
+  
+    #log(index, 'console')
+    #log(name, 'console')
+    #matching_option = [option for option in options if option.name.first == name][0]
+    #log('matching_option:', 'console')
+    #log(matching_option.name.first, 'console')
+    #if not defined(f'options[{index}]'):
+    #  log('appending', 'console')
+    #  options.appendObject()
+    #if options[index].name.first != name:
+    #  log('setting', 'console')
+    #  log(name, 'console')
+    #  options[index].name.first = name
+  #to_delete = []
+  #for index, option in enumerate(options):
+  #  if defined(f'name[{index}]') and name[index] != option.name.first:
+  #    to_delete.append(index)
+  #for index in to_delete:
+  #  options.delitem(index)
+---
+code: |
+  options[i].name.first = names[i]
+  if i >= len(names) - 1:
+    options.there_is_another = False
+    options.gathered = True
+  else:
+    options.there_is_another = True
+---
+mandatory: True
+code: |
+  multi_user = True
+  options.gather()
+  log(options[len(options) - 1].name.first, 'console')
+  log(names[len(names) - 1], 'console')
+  log(set(names).symmetric_difference(set([option.name.first for option in options])), 'console')
+  #set(c).symmetric_difference(set(d))
+  if len(set(names) - set([option.name.first for option in options])) > 0:
+    log('yes', 'console')
+  their_choices
+  # why doesn't this trigger gathering while the table does
+  #their_choices.gather()
+  their_choices.complete_attribute = "confidence"
+  if their_choices.number_gathered() > 0:
+    rank_choices
+  to_avoid
+  to_avoid.complete_attribute = "confidence"
+  # why doesn't this trigger gathering while the table does
+  #to_avoid.gather()
+  if to_avoid.number_gathered() > 0:
+    to_avoid_table
+  submit
+  end
+---
+question: Pick the candidates you recommend hiring
+subquestion: |
+  Later you will get to recommend **against** hiring some candidates.
+fields:
+  - no label: their_choices
+    datatype: object_checkboxes
+    choices: |
+      options
+---
+if:
+  defined('to_avoid')
+question: Pick the candidates you recommend hiring
+fields:
+  - no label: their_choices
+    datatype: object_checkboxes
+    choices: |
+      options.difference(to_avoid)
+---
+question: Pick the candidates you recommend **against**
+fields:
+  - no label: to_avoid
+    datatype: object_checkboxes
+    choices: |
+      options.difference(their_choices)
+---
+# Must come first or `to_avoid` will be gathered early
+if: |
+  x in to_avoid
+generic object: Individual
+question: Tell us more about ${ x }
+subquestion: |
+  You recommended **against** hiring ${ x }.
+fields:
+  - How confident are you in your knowledge of ${ x }'s subject matter: x.confidence
+    datatype: radio
+    choices:
+      - Missed seminar/totally unsure: 0
+      - Not subject matter expert/very unsure : 1
+      - Not subject matter expert, but confident on paper/${ x }: 2
+      - Subject matter expert and confident on paper/${ x }: 3
+  - What more do you have to say about ${ x }: x.notes
+    required: False
+    input type: area
+---
+if: |
+  x in their_choices
+generic object: Individual
+question: Tell us more about ${ x }
+subquestion: |
+  You recommended we hire ${ x }.
+fields:
+  - How confident are you in your knowledge of ${ x }'s subject matter: x.confidence
+    datatype: radio
+    choices:
+      - Missed seminar/totally unsure: 0
+      - Not subject matter expert/very unsure : 1
+      - Not subject matter expert, but confident on paper/${ x }: 2
+      - Subject matter expert and confident on paper/${ x }: 3
+  - Would you "got to bat" for ${ x } (extreme positive, you would vocalize): x.got_to_bat
+    datatype: radio
+    choices:
+      - Yes: Yes
+      - No: No
+  - Do you think we could get ${ x } if we gave an offer?: x.gettable
+    datatype: radio
+    choices:
+      - Definitely (CU preference): Definitely
+      - Probably: Probably
+      - No idea: No idea
+      - Doubt it: Unlikely
+      - Definitely not: No
+  - What more do you have to say about ${ x }: x.notes
+    required: False
+    input type: area
+---
+continue button field: rank_choices
+question: Rank
+subquestion: |
+  Rank your choices
+  
+  ${ choices_table }
+---
+table: rank_table
+rows: their_choices
+#rows: |
+#  [choice for choice in their_choices if choice.do_hire]
+columns:
+  - Rank: |
+      row_index + 1
+  - Candidate: |
+      row_item
+  - Your expertise: |
+      row_item.confidence
+  - Go to bat: |
+      row_item.got_to_bat
+  - Gettablility: |
+      row_item.gettable
+  - Notes: |
+      row_item.notes
+allow reordering: True
+edit:
+  - confidence
+---
+table: to_avoid_table
+rows: to_avoid
+columns:
+  - Candidate: |
+      row_item
+  - Your expertise: |
+      row_item.confidence
+  - Notes: |
+      row_item.notes
+edit:
+  - confidence
+---
+continue button field: rank_choices
+need:
+  - their_choices.gathered
+  - rank_table
+question: Rank your hiring choices
+subquestion: |
+  ${ action_button_html(url_action('their_choices'), label="Change your choices") }
+  
+  ${ rank_table }
+---
+continue button field: submit
+continue button label: Submit your answers
+question: Review your answers
+subquestion: |
+  #### Candidates you recommend hiring
+  
+  % if their_choices.number_gathered() > 0:
+  ${ rank_table }
+  % else:
+  None
+  % endif
+  
+  ${ action_button_html(url_action('their_choices'), label="Edit candidates you recommend hiring") }
+  
+  % if their_choices.number_gathered() > 0 and to_avoid.number_gathered() > 0:
+  ---
+  % endif
+  
+  #### Candidates you recommend against
+  
+  % if to_avoid.number_gathered() > 0:
+  ${ to_avoid_table }
+  % else:
+  None
+  % endif
+  
+  ${ action_button_html(url_action('to_avoid'), label="Edit candidates you recommend **against**") }
+---
+event: end
+question: Thank you for taking the survey!
+subquestion: |
+  You can still edit your answers.
+  
+  ${ action_button_html(url_action('submit'), label="Edit your answers") }
+  
+comment: |
+  ${ action_button_html(url_action('rank_choices'), label="Edit your answers") }
+  
+  Copy this link to come back and edit your answers later: [${ interview_url() }](${ interview_url() })
+  
+  <div class="al_copy">
+    <input readonly="" class="al_copy_value" type="text" value="${ interview_url() }">
+    <button class="btn btn-secondary al_copy_button" type="button">
+    <svg class="svg-inline--fa fa-copy" aria-hidden="true" focusable="false" data-prefix="far" data-icon="copy" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" data-fa-i2svg=""><path fill="currentColor" d="M502.6 70.63l-61.25-61.25C435.4 3.371 427.2 0 418.7 0H255.1c-35.35 0-64 28.66-64 64l.0195 256C192 355.4 220.7 384 256 384h192c35.2 0 64-28.8 64-64V93.25C512 84.77 508.6 76.63 502.6 70.63zM464 320c0 8.836-7.164 16-16 16H255.1c-8.838 0-16-7.164-16-16L239.1 64.13c0-8.836 7.164-16 16-16h128L384 96c0 17.67 14.33 32 32 32h47.1V320zM272 448c0 8.836-7.164 16-16 16H63.1c-8.838 0-16-7.164-16-16L47.98 192.1c0-8.836 7.164-16 16-16H160V128H63.99c-35.35 0-64 28.65-64 64l.0098 256C.002 483.3 28.66 512 64 512h192c35.2 0 64-28.8 64-64v-32h-47.1L272 448z"></path></svg><!-- <i class="far fa-copy"></i> Font Awesome fontawesome.com -->
+    <span>Copy</span></button>
+  </div>
+---
